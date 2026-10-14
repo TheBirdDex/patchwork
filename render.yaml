@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: patchwork
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    numInstances: 1
