@@ -1,4 +1,4 @@
-import { SIZE } from '/shared/rules.js';
+import { SIZE, previewStats, RANGES, STAT_DRIVER, STOCK_INFO, norm, revealLines, resultLine } from '/shared/rules.js';
 const PAL = ['#ffffff', '#2b2a33', '#e74c3c', '#f39c12', '#27ae60', '#3d5af1', '#9b59b6'];
 const app = document.getElementById('app');
 const S = { ws: null, room: null, side: 0, grid: null, color: 1, reveal: null, log: null, err: '', closed: null, pending: [], waking: false };
@@ -91,20 +91,29 @@ function render() {
     return;
   }
   if (r.phase === 'drawing' && !me.done) {
-    h(`<div class="timer" id="t"></div><p class="small">You draw the ${r.you === 0 ? 'LEFT' : 'RIGHT'} half. Your friend's half stays hidden.</p>
+    const foe = r.foe, info = foe ? STOCK_INFO[foe.name] : null;
+    h(`<div class="vsbar"><div class="timer" id="t"></div>${foe ? `<canvas id="foeart" width="64" height="64"></canvas><div class="foeinfo"><b>VS ${foe.name}</b><br>${info.trait}<br><span class="tip">Tip: ${info.tip}</span></div>` : ''}</div>
+      <p class="small">You draw the ${r.you === 0 ? 'LEFT' : 'RIGHT'} half. Your friend's half stays hidden.</p>
       <canvas id="cv" width="512" height="512"></canvas>
+      ${r.round === 1 ? '<p class="hint">Spikes and colors hit harder · Big bodies last longer · Thin creatures move faster · Matching halves defend better</p>' : ''}
+      <div class="small" style="margin-top:6px">Your half's style</div><div class="sbars" id="sbars"></div>
       <div class="palette">${PAL.map((c, i) => `<div class="sw ${i === S.color ? 'on' : ''}" data-c="${i}" style="background:${i ? c : '#fff'};${i ? '' : 'border-style:dashed;border-color:#999'}" title="${i ? '' : 'eraser'}"></div>`).join('')}</div>
       <button id="clear" class="alt">Clear</button><button id="done">Done</button><p class="err">${S.err}</p>${partnerLine}`);
     const cv = $('#cv'); const grid = S.grid || Array.from({ length: SIZE }, () => new Array(SIZE).fill(0)); S.grid = grid;
     drawGrid(cv, grid, { hideSide: 1 - r.you, lines: true });
+    if (foe) drawGrid($('#foeart'), stockArt(foe.name));
+    const bars = () => { const st = previewStats(grid, r.you); $('#sbars').innerHTML = Object.keys(RANGES).map(k =>
+      `<div class="sb"><span class="k">${{ hp: 'HP', power: 'PWR', speed: 'SPD', reach: 'RCH', defense: 'DEF' }[k]}</span><span class="bar"><i style="width:${Math.round(norm(k, st[k]) * 100)}%"></i></span><span class="v">${st[k]}</span><span class="d">${STAT_DRIVER[k]}</span></div>`).join(''); };
+    let barT = null; const queueBars = () => { if (!barT) barT = setTimeout(() => { barT = null; bars(); }, 120); };
+    bars();
     let down = false;
     const at = (e) => { const b = cv.getBoundingClientRect(); return [Math.floor((e.clientX - b.left) / b.width * SIZE), Math.floor((e.clientY - b.top) / b.height * SIZE)]; };
     const paint = (e) => { const [x, y] = at(e); const x0 = r.you * 16; if (x < x0 || x >= x0 + 16 || y < 0 || y >= SIZE) return;
-      if (grid[y][x] !== S.color) { grid[y][x] = S.color; S.pending.push([x, y, S.color]); drawGrid(cv, grid, { hideSide: 1 - r.you, lines: true }); } };
+      if (grid[y][x] !== S.color) { grid[y][x] = S.color; S.pending.push([x, y, S.color]); drawGrid(cv, grid, { hideSide: 1 - r.you, lines: true }); queueBars(); } };
     cv.onpointerdown = (e) => { down = true; cv.setPointerCapture(e.pointerId); paint(e); };
     cv.onpointermove = (e) => down && paint(e); cv.onpointerup = () => { down = false; };
     app.querySelectorAll('.sw').forEach(el => el.onclick = () => { S.color = +el.dataset.c; app.querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === el)); });
-    $('#clear').onclick = () => { for (let y = 0; y < SIZE; y++) for (let x = r.you * 16; x < r.you * 16 + 16; x++) if (grid[y][x]) { grid[y][x] = 0; S.pending.push([x, y, 0]); } drawGrid(cv, grid, { hideSide: 1 - r.you, lines: true }); };
+    $('#clear').onclick = () => { for (let y = 0; y < SIZE; y++) for (let x = r.you * 16; x < r.you * 16 + 16; x++) if (grid[y][x]) { grid[y][x] = 0; S.pending.push([x, y, 0]); } drawGrid(cv, grid, { hideSide: 1 - r.you, lines: true }); bars(); };
     $('#done').onclick = () => { flush(); S.err = ''; send({ t: 'done' }); };
     tick(); timerInt = setInterval(tick, 250);
     return;
@@ -114,13 +123,14 @@ function render() {
     const st = S.reveal.stats;
     h(`<h2>~ ${S.reveal.name} ~</h2><canvas id="cv" width="384" height="384"></canvas>
       <div class="stats"><div>HP<br><b>${st.hp}</b></div><div>PWR<br><b>${st.power}</b></div><div>SPD<br><b>${st.speed}</b></div><div>RCH<br><b>${st.reach}</b></div><div>DEF<br><b>${st.defense}</b></div><div>vs<br><b>${S.reveal.foe.name}</b></div></div>
+      <p class="why"><b>${revealLines(st, S.reveal.foe).strongest}</b><br>${revealLines(st, S.reveal.foe).matchup}</p>
       <button id="go">Battle!</button> <button id="rep" class="alt">Report/Hide</button>${partnerLine}`);
     drawGrid($('#cv'), S.reveal.grid); $('#go').onclick = () => send({ t: 'battle' }); $('#rep').onclick = report; return;
   }
   if (r.phase === 'battle' && S.log && S.reveal) return playBattle();
   if (r.phase === 'result' && S.log) {
     const win = S.log.winner === 'you'; const again = me.again;
-    h(`<h1>${win ? 'YOU WIN!' : 'YOU LOSE!'}</h1><p>${S.reveal.name} ${win ? 'beat' : 'lost to'} ${S.reveal.foe.name}${S.log.reason === 'rounds' ? ' on points' : ''}.</p>
+    h(`<h1>${win ? 'YOU WIN!' : 'YOU LOSE!'}</h1><p>${S.reveal.name} ${win ? 'beat' : 'lost to'} ${S.reveal.foe.name}${S.log.reason === 'rounds' ? ' on points' : ''}.</p><p class="why">${resultLine(S.reveal.stats, S.reveal.foe, S.log)}</p>
       <canvas id="cv" width="256" height="256"></canvas><br>
       <button id="again" ${again ? 'disabled' : ''}>${again ? 'Waiting for friend…' : 'Play again'}</button><button id="leave" class="alt">Leave</button><button id="rep" class="alt">Report/Hide</button>${partnerLine}`);
     drawGrid($('#cv'), S.reveal.grid);

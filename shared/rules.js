@@ -99,3 +99,56 @@ export function battle(a, b) {
   const pa = f[0].cur / f[0].hp, pb = f[1].cur / f[1].hp;
   return { events, winner: pa >= pb ? 'you' : 'foe', reason: 'rounds' };
 }
+
+// ---- v1.1: make drawing matter (explanations) ----
+export const STOCK_INFO = {
+  Rok: { trait: 'Slow, hits very hard.', tip: 'Be fast and skinny to strike first.' },
+  Zipp: { trait: 'Super fast, fragile.', tip: 'Go big and chunky to soak its hits.' },
+  Mossle: { trait: 'Good at everything.', tip: 'Use lots of colors and spikes to out-hit it.' },
+};
+export const RANGES = { hp: [30, 100], power: [3, 10], speed: [1, 10], reach: [1, 10], defense: [1, 10] };
+export const STAT_LABEL = { hp: 'HP', power: 'Power', speed: 'Speed', reach: 'Reach', defense: 'Defense' };
+export const STAT_DRIVER = { hp: 'big body', power: 'colors + spikes', speed: 'less ink', reach: 'spread wide', defense: 'mirror shape' };
+const STAT_WHY = { hp: 'a big, solid body', power: 'lots of colors and spiky edges', speed: 'a light, skinny body', reach: 'a wide, sprawling shape', defense: 'two halves that match' };
+export const norm = (k, v) => Math.max(0, Math.min(1, (v - RANGES[k][0]) / (RANGES[k][1] - RANGES[k][0])));
+
+// Preview from one player's own half only, mirrored onto the full grid (never uses partner cells).
+export function mirrorHalf(grid, side) {
+  const g = emptyGrid();
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE / 2; x++) {
+    const src = side === 0 ? x : SIZE - 1 - x;
+    g[y][x] = g[y][SIZE - 1 - x] = grid[y][src];
+  }
+  return g;
+}
+export function previewStats(grid, side) { return stats(mirrorHalf(grid, side)); }
+
+export function strongest(st) {
+  const keys = Object.keys(RANGES);
+  let best = keys[0];
+  for (const k of keys) if (norm(k, st[k]) > norm(best, st[best])) best = k;
+  return best;
+}
+export function revealLines(st, foe) {
+  const k = strongest(st);
+  const first = st.speed !== foe.speed ? st.speed > foe.speed : st.reach >= foe.reach;
+  const myHit = damage(st, foe), foeHit = damage(foe, st);
+  const IS = { Rok: 'is slow but hits very hard', Zipp: 'is super fast but fragile', Mossle: 'is good at everything' };
+  let matchup = `${foe.name} ${IS[foe.name] || 'is ready'}: `;
+  matchup += first ? 'you strike first' : `${foe.name} strikes first`;
+  matchup += `, you hit for ${myHit} and it hits for ${foeHit}.`;
+  return { strongest: `Strongest: ${STAT_LABEL[k]}, thanks to ${STAT_WHY[k]}.`, matchup };
+}
+export function resultLine(st, foe, result) {
+  const mine = result.events.filter(e => e.attacker === 'you').length;
+  if (result.winner === 'you') {
+    const k = strongest(st);
+    if (k === 'speed' || st.speed > foe.speed) return `You won: your Speed ${st.speed} let you hit first, ${mine} hits in all.`;
+    return `You won: your ${STAT_LABEL[k]} ${st[k]} carried it, ${mine} hits in all.`;
+  }
+  const foeHit = damage(foe, st);
+  if (result.reason === 'rounds') return `${foe.name} lasted longer on points. Try ${STOCK_INFO[foe.name]?.tip.toLowerCase().replace(/\.$/, '') || 'a different shape'}.`;
+  if (foe.speed > st.speed && foeHit >= 6) return `${foe.name}'s Power ${foe.power} out-hit your ${st.hp} HP. Try a bigger body.`;
+  if (foe.speed > st.speed) return `${foe.name}'s Speed ${foe.speed} kept it hitting first. Try a bigger body to soak hits.`;
+  return `${foe.name}'s Power ${foe.power} out-hit your ${st.hp} HP. ${STOCK_INFO[foe.name]?.tip || ''}`.trim();
+}

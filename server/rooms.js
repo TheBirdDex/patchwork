@@ -38,6 +38,8 @@ export class Rooms {
   startDrawing(room) {
     room.phase = 'drawing'; room.round++; room.reveal = null; room.result = null;
     for (const p of room.players) { p.grid = emptyGrid(); p.done = false; p.again = false; }
+    room.roundSeed = (room.seed + room.round * 7919) >>> 0;
+    room.foe = pickStock(room.roundSeed); // v1.1: opponent chosen before drawing
     room.deadline = this.now() + CONFIG.drawMs;
     clearTimeout(room.drawTimer);
     if (this.timers) room.drawTimer = setTimeout(() => this.timeUp(room), CONFIG.drawMs);
@@ -77,10 +79,10 @@ export class Rooms {
     clearTimeout(room.drawTimer);
     const grid = emptyGrid();
     for (const p of room.players) { const x0 = p.side * SIZE / 2; for (let y = 0; y < SIZE; y++) for (let x = x0; x < x0 + SIZE / 2; x++) grid[y][x] = p.grid[y][x]; }
-    const seed = (room.seed + room.round * 7919) >>> 0;
+    const seed = room.roundSeed;
     const st = stats(grid);
     let name = nameFor(st, seed, grid); if (!cleanName(name)) name = 'Patchling';
-    const foe = pickStock(seed);
+    const foe = room.foe;
     room.reveal = { grid, stats: st, name, foe, seed };
     room.result = battle({ name, ...st }, foe);
     room.phase = 'reveal';
@@ -114,7 +116,7 @@ export class Rooms {
   // Public room status. Never contains any player's cells.
   broadcast(room) {
     for (const p of room.players) p.send({
-      t: 'room', code: room.code, phase: room.phase, you: p.side, deadline: room.deadline, now: this.now(),
+      t: 'room', code: room.code, phase: room.phase, round: room.round, foe: room.foe || null, you: p.side, deadline: room.deadline, now: this.now(),
       players: room.players.map(x => ({ side: x.side, connected: x.connected, done: x.done, again: !!x.again })),
     });
   }

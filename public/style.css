@@ -14,3 +14,7 @@ canvas{background:#fff;border-radius:8px;touch-action:none;width:100%;max-width:
 .spin{display:inline-block;width:18px;height:18px;border:3px solid #ccc;border-top-color:#3d5af1;border-radius:50%;animation:s 1s linear infinite;vertical-align:middle}
 @keyframes s{to{transform:rotate(360deg)}}.small{font-size:.85em;color:#777}
 .banner{background:#ffe9b3;border-radius:10px;padding:10px;margin:8px 0}
+.vsbar{display:flex;align-items:center;gap:10px;justify-content:center;text-align:left}.vsbar #foeart{width:56px;box-shadow:none}
+.foeinfo{font-size:.9em}.tip{color:#3d5af1;font-weight:600}.hint{font-size:.85em;background:#fff;border-radius:8px;padding:6px;margin:6px 0}
+.sbars{display:grid;gap:3px;text-align:left}.sb{display:grid;grid-template-columns:2.6em 1fr 1.8em 7.5em;gap:6px;align-items:center;font-size:.8em}
+.sb .bar{margin:0}.sb .bar i{transition:width .15s}.sb .d{color:#777}.why{background:#fff;border-radius:8px;padding:8px;font-size:.9em}
