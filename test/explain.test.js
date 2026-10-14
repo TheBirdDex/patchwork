@@ -33,3 +33,17 @@ test('reveal line names the real strongest stat; result line matches the battle'
     assert.ok(r.winner === 'you' ? line.startsWith('You won') : line.includes(foe.name), line);
   }
 });
+
+test('L-004: result line agrees with the actual turn order in the log', () => {
+  const shapes = [];
+  for (let n = 2; n <= 30; n += 2) { const g = emptyGrid(); for (let y = 16 - n / 2; y < 16 + n / 2; y++) for (let x = 16 - n / 2; x < 16 + n / 2; x++) g[y][x] = 1 + ((x * y) % 5); shapes.push(g); }
+  for (const g of shapes) for (const foe of STOCK) {
+    const st = stats(g), r = battle({ name: 'me', ...st }, foe), line = resultLine(st, foe, r);
+    const first = r.events[0].attacker;
+    if (r.reason === 'rounds') { assert.match(line, /Time ran out/); continue; }
+    const claimsWinnerFirst = /struck first and never let up/.test(line);
+    assert.equal(claimsWinnerFirst, first === r.winner, `${line} (first=${first}, winner=${r.winner})`);
+    if (/You were faster|You hit first/.test(line)) assert.equal(first, 'you');
+    if (/was faster, but your|hit first, but your/.test(line)) assert.equal(first, 'foe');
+  }
+});

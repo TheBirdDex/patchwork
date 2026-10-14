@@ -140,15 +140,19 @@ export function revealLines(st, foe) {
   return { strongest: `Strongest: ${STAT_LABEL[k]}, thanks to ${STAT_WHY[k]}.`, matchup };
 }
 export function resultLine(st, foe, result) {
-  const mine = result.events.filter(e => e.attacker === 'you').length;
-  if (result.winner === 'you') {
-    const k = strongest(st);
-    if (k === 'speed' || st.speed > foe.speed) return `You won: your Speed ${st.speed} let you hit first, ${mine} hits in all.`;
-    return `You won: your ${STAT_LABEL[k]} ${st[k]} carried it, ${mine} hits in all.`;
+  // L-004: explain from the actual battle log, never from a guess.
+  const won = result.winner === 'you';
+  const firstSide = result.events[0]?.attacker;
+  const myHit = damage(st, foe), foeHit = damage(foe, st);
+  const winnerFirst = firstSide === result.winner;
+  if (result.reason === 'rounds') return won ? 'Time ran out and you had more health left.' : `Time ran out and ${foe.name} had more health left. ${STOCK_INFO[foe.name]?.tip || ''}`.trim();
+  if (won) {
+    if (winnerFirst) return 'You struck first and never let up.';
+    if (myHit > foeHit) return `${foe.name} was faster, but your hits did ${myHit} to its ${foeHit}.`;
+    return `${foe.name} hit first, but your big body outlasted it.`;
   }
-  const foeHit = damage(foe, st);
-  if (result.reason === 'rounds') return `${foe.name} lasted longer on points. Try ${STOCK_INFO[foe.name]?.tip.toLowerCase().replace(/\.$/, '') || 'a different shape'}.`;
-  if (foe.speed > st.speed && foeHit >= 6) return `${foe.name}'s Power ${foe.power} out-hit your ${st.hp} HP. Try a bigger body.`;
-  if (foe.speed > st.speed) return `${foe.name}'s Speed ${foe.speed} kept it hitting first. Try a bigger body to soak hits.`;
-  return `${foe.name}'s Power ${foe.power} out-hit your ${st.hp} HP. ${STOCK_INFO[foe.name]?.tip || ''}`.trim();
+  const tip = STOCK_INFO[foe.name]?.tip || '';
+  if (winnerFirst) return `${foe.name} struck first and never let up. ${tip}`.trim();
+  if (foeHit > myHit) return `You were faster, but ${foe.name}'s hits did ${foeHit} to your ${myHit}. ${tip}`.trim();
+  return `You hit first, but ${foe.name} outlasted you. ${tip}`.trim();
 }
